@@ -7,7 +7,7 @@ evolucaoCompleta = pd.DataFrame()
 
 for ano in range(2014,2018):
 
-    caminhoAno = "..\..\..\Data\Atendimentos Fornecedor\\" + str(ano) + "\\"
+    caminhoAno = "../../../Data/Atendimentos Fornecedor/" + str(ano) + "/"
 
     for numeroTrimestre in range(1,5):
 
