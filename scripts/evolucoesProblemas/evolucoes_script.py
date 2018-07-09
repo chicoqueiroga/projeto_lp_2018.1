@@ -2,30 +2,37 @@
 
 import pandas as pd
 import matplotlib.pyplot as plt
+from itertools import product
 
-evolucaoCompleta = pd.DataFrame()
+def calculaComportamentoProblemasTrimestre(arquivo):
 
-for ano in range(2014,2018):
+    caminhoCompleto = "../../../Data/Atendimentos Fornecedor/" + arquivo
 
-    caminhoAno = "../../../Data/Atendimentos Fornecedor/" + str(ano) + "/"
+    dadosTrimestre = pd.read_csv(caminhoCompleto, delimiter=';', na_filter=False, error_bad_lines=False)
 
-    for numeroTrimestre in range(1,5):
+    atendimentosRequeridos = ["Abertura Direta de Reclamação", "Reclamação de Ofício"]
 
-        caminhoTrimestre = caminhoAno + "Trimestre " + str(numeroTrimestre) + ".csv"
-        dadosTrimestre = pd.read_csv(caminhoTrimestre, delimiter =';', na_filter = False, error_bad_lines = False)
+    dadosTrimestre = dadosTrimestre[(dadosTrimestre.DescricaoCNAEPrincipal != "NULL") & dadosTrimestre.DescricaoTipoAtendimento.isin(atendimentosRequeridos)]
+    comportamentoProblemas = dadosTrimestre.GrupoProblema.value_counts()
 
-        atendimentosRequeridos = ["Abertura Direta de Reclamação", "Reclamação de Ofício"]
+    print("Fim do processamento do arquivo " + arquivo)
 
-        dadosTrimestre = dadosTrimestre[(dadosTrimestre.DescricaoCNAEPrincipal != "NULL") & dadosTrimestre.DescricaoTipoAtendimento.isin(atendimentosRequeridos)]
-        trimestreSeries = dadosTrimestre.GrupoProblema.value_counts()
+    return comportamentoProblemas
 
-        print(trimestreSeries)
+def agrupaComportamentosProblemas(comportamentoAntes, comportamentoDepois):
 
-        evolucaoCompleta = pd.concat([evolucaoCompleta, trimestreSeries], axis = 1, sort = False)
+    evolucao = pd.concat([comportamentoAntes, comportamentoDepois], axis=1, sort=False)
 
-        print("\nFim do processamento do trimestre \n")
+    return evolucao
 
-    print("\nFim do processamento do ano \n")
+anos = ["2014", "2015", "2016", "2017"]
+trimestres = ["1","2","3","4"]
+combinacoes = product(anos, trimestres)
+
+arquivos = map(lambda (ano, numTrimestre): ano + "/Trimestre " + numTrimestre + ".csv", combinacoes)
+
+evolucoesTrimestresSeparados = map(calculaComportamentoProblemasTrimestre, arquivos)
+evolucaoCompleta = reduce(agrupaComportamentosProblemas, evolucoesTrimestresSeparados)
 
 evolucaoCompleta = evolucaoCompleta.dropna()
 evolucaoCompleta = evolucaoCompleta.transpose()
