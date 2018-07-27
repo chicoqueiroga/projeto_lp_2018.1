@@ -1,83 +1,138 @@
 # -*- coding: utf-8 -*-
 import pandas as pd
-import matplotlib.pyplot as plt
 import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.widgets import Cursor
 
-proconCsvFile1 = "../../../Data/Atendimentos Fornecedor/2017/Trimestre 1.csv"
+def pegaDf(ano):
+	trimestres = np.arange(1,5)
+	caminhos = map(lambda trimestre: "../../../Data/Atendimentos Fornecedor/"+ano+"/Trimestre "+str(trimestre)+".csv", trimestres)
+	myDfsTrimestre = map(lambda caminho: pd.read_csv(caminho, delimiter=';', na_filter=False, error_bad_lines=False), caminhos)
 
-"""proconDt1 = pd.read_csv(proconCsvFile1, delimiter = ';', na_filter = False)
-proconCsvFile2 = "../../../Data/Atendimentos Fornecedor/2017/Trimestre 2.csv"
-proconDt2 = pd.read_csv(proconCsvFile2, delimiter = ';', na_filter = False)
-proconCsvFile3 = "../../../Data/Atendimentos Fornecedor/2017/Trimestre 3.csv"
-proconDt3 = pd.read_csv(proconCsvFile3, delimiter = ';', na_filter = False)
-proconCsvFile4 = "../../../Data/Atendimentos Fornecedor/2017/Trimestre 4.csv"
-proconDt4 = pd.read_csv(proconCsvFile4, delimiter = ';', na_filter = False)
+	myDf =  pd.concat(myDfsTrimestre)
+	myDf = myDf[
+    (myDf.CodigoCNAEPrincipal != 'NULL') &\
+	(myDf.DescricaoTipoAtendimento.isin(['Abertura Direta de Reclamação', 'Reclamação de Ofício']))]
 
-proconDt = pd.concat([proconDt1, proconDt2, proconDt3, proconDt4])
-"""
+	myDf['GrupoProblema'] = myDf['GrupoProblema'].apply(lambda x : x.replace('Problemas', 'P.') if 'Problemas' in x else (x.replace(' de Produto ou Serviço', '') if 'Serviço' in x else x))
 
-proconDt = pd.read_csv(proconCsvFile1, delimiter = ';', na_filter = False)
-proconDt = proconDt[
-    (proconDt.CodigoCNAEPrincipal != 'NULL') &\
-	(proconDt.DescricaoTipoAtendimento.isin(['Abertura Direta de Reclamação', 'Reclamação de Ofício']))]
+	return myDf
 
 
-proconDt['GrupoProblema'] = proconDt['GrupoProblema'].apply(lambda x : x.replace('Problemas', 'P.') if 'Problemas' in x else x)
-proconDt['GrupoProblema'] = proconDt['GrupoProblema'].apply(lambda x : x.replace(' de Produto ou Serviço', '') if 'Serviço' in x else x)
-
-def analiseDePareto(coluna):
-	dfAnalisado = pd.Series.to_frame(proconDt[coluna].value_counts())
+def analiseDePareto(coluna, ano, df):
+	dfAnalisado = pd.Series.to_frame(df[coluna].value_counts())
 	dfAnalisado.reset_index(inplace=True)
 	dfAnalisado.columns = [coluna, 'qtdOcorrencia']
 	dfAnalisado.sort_values('qtdOcorrencia')
 	dfAnalisado['porcentagem'] = (dfAnalisado['qtdOcorrencia'] / dfAnalisado['qtdOcorrencia'].sum()) * 100
 	dfAnalisado['porcentagemAcumulada'] = dfAnalisado['porcentagem'].cumsum()
 
-	outrosDt = dfAnalisado[dfAnalisado.porcentagemAcumulada > 80]
+	outrosDf = dfAnalisado[dfAnalisado.porcentagemAcumulada > 80]
 	dfAnalisado = dfAnalisado[dfAnalisado.porcentagemAcumulada <= 80]
 	dfAnalisado = dfAnalisado[[coluna, 'qtdOcorrencia', 'porcentagemAcumulada']]
-
-	dfAnalisado = dfAnalisado.append({coluna: 'Outros', 'qtdOcorrencia': outrosDt.qtdOcorrencia.sum(), 'porcentagemAcumulada': 100}, ignore_index=True)
-
+	dfAnalisado = dfAnalisado.append({coluna: 'Outros', 'qtdOcorrencia': outrosDf.qtdOcorrencia.sum(), 'porcentagemAcumulada': 100}, ignore_index=True)
 	dfAnalisado.set_index(coluna, inplace=True)
 
 	barras = dfAnalisado.qtdOcorrencia.plot(kind='bar', color='r')
-	linha  = dfAnalisado.porcentagemAcumulada.plot(linestyle='-', marker='o', ax=barras, secondary_y=True, color = '#008000', rot=85)
+	linha  = dfAnalisado.porcentagemAcumulada.plot(linestyle='-', marker='o', ax=barras, secondary_y=True, color = '#008000', rot=90)
 	linha.set_yticks(np.arange(0,101,10))
-
-	plt.savefig(coluna + ' Completo.png', bbox_inches='tight')
+	
+	plt.savefig(ano + '/' + coluna + ' Pareto.png', bbox_inches='tight')
 	plt.show()
 	return list(dfAnalisado.index.values)
 
 
-principaisProdutosServicos = analiseDePareto('GrupoAssunto')
-principaisProblemas = analiseDePareto('GrupoProblema')
+def representacaoAssuntoProblema(df):
 
-agrupamento = proconDt[proconDt.GrupoAssunto.isin(principaisProdutosServicos)].groupby('GrupoAssunto')['GrupoProblema'].value_counts()
+	ano = str(df['AnoAtendimento'].values[0])
+	
+	principaisProdutosServicos = analiseDePareto('GrupoAssunto', ano, df)
+	principaisProblemas = analiseDePareto('GrupoProblema', ano, df)
 
-outrosProblemas = agrupamento[~agrupamento.index.get_level_values('GrupoProblema').isin(principaisProblemas)]
-outrosProblemas = outrosProblemas.unstack(level=-1, fill_value=0)
+	agrupamento = df[df.GrupoAssunto.isin(principaisProdutosServicos)].groupby('GrupoAssunto')['GrupoProblema'].value_counts()
 
-outrosProblemas['Outros Problemas'] = outrosProblemas.sum(axis=1)
+	outrosProblemas = agrupamento[~agrupamento.index.get_level_values('GrupoProblema').isin(principaisProblemas)]
+	outrosProblemas = outrosProblemas.unstack(level=-1, fill_value=0)
+
+	outrosProblemas['Outros Problemas'] = outrosProblemas.sum(axis=1)
+
+	outrosProblemas = pd.Series.to_frame(outrosProblemas['Outros Problemas'])
+	outrosProblemas = outrosProblemas.stack()
+
+	agrupamento = agrupamento[agrupamento.index.get_level_values('GrupoProblema').isin(principaisProblemas)]
+	agrupamento = pd.concat([agrupamento, outrosProblemas])
+
+	agrupamento = agrupamento.unstack(level=-1, fill_value=0)
+	agrupamento['totalOcorrencias'] = agrupamento.sum(axis=1)
+
+	agrupamento.sort_values('totalOcorrencias', inplace=True)
+	agrupamento.drop(columns = ['totalOcorrencias'], inplace=True)
+
+	# agrupamento.plot.barh(stacked=True)
+
+	# ax = plt.gca()
+	# # ax.xaxis.grid(color='gray', linestyle='dashed', linewidth=2)
+	
+	# myCursor = Cursor(ax, useblit=True, linewidth=2)
+
+	# plt.savefig(ano + '/representacaoAssuntoProblema.png', bbox_inches='tight')
+	# plt.show()
+
+	return agrupamento
 
 
-outrosProblemas = pd.Series.to_frame(outrosProblemas['Outros Problemas'])
-outrosProblemas = outrosProblemas.stack()
+def cascata(antesDepois):
+	totalAntes = antesDepois[0]['Vício ou Má Qualidade'].sum()
+	totalDepois = antesDepois[1]['Vício ou Má Qualidade'].sum()
 
-agrupamento = agrupamento[agrupamento.index.get_level_values('GrupoProblema').isin(principaisProblemas)]
-agrupamento = pd.concat([agrupamento, outrosProblemas])
+	antes = pd.Series.to_frame(antesDepois[0]['Vício ou Má Qualidade'].tail(10))
+	depois = pd.Series.to_frame(antesDepois[1]['Vício ou Má Qualidade'])
 
-print(type(agrupamento))
+	antes.columns = ['qtdAnterior']
 
-# agrupamento.columns = ['qtdOcorrencia']
+	antesDepois = antes.join(depois, how='inner')
+	antesDepois.rename(columns={'Vício ou Má Qualidade': 'qtdPosterior'}, inplace=True)
+	antesDepois['diferenca'] = antesDepois.qtdPosterior - antesDepois.qtdAnterior
 
-agrupamento = agrupamento.unstack(level=-1, fill_value=0)
-agrupamento['totalOcorrencias'] = agrupamento.sum(axis=1)
+	antesDepois = antesDepois['diferenca']
+	totalVariacoes = antesDepois.sum()
+	variacaoOutros = totalDepois - (totalAntes + totalVariacoes)
 
-agrupamento.sort_values('totalOcorrencias', inplace=True)
-agrupamento.drop(columns = ['totalOcorrencias'], inplace=True)
+	antesDepois['Outros'] = variacaoOutros
+	antesDepois = pd.concat([pd.Series(totalAntes, index=['totalAntes']), antesDepois])
 
-agrupamento.plot.barh(stacked=True)
+	# antesDepois.columns = ['variacoes']
+	print(type(antesDepois))
+	print(antesDepois)
 
-plt.savefig('agrupamento.png', bbox_inches='tight')
-plt.show()
+	barraInvisivel = antesDepois.cumsum().shift(1).fillna(0)
+	barraInvisivel['totalDepois'] = totalDepois
+	antesDepois['totalDepois'] = totalDepois
+
+	passo = barraInvisivel.reset_index(drop=True).repeat(3).shift(-1)
+	passo[1::3] = np.nan
+
+	barraInvisivel['totalDepois'] = 0
+
+	my_plot = antesDepois.plot(kind='bar', stacked=True, bottom=barraInvisivel,legend=None)
+	my_plot.plot(passo.index, passo.values,'k')
+
+	ax = plt.gca()
+
+	ax.set_ylim(30000, 40000)
+
+	plt.savefig('cascata2016-2017.png', bbox_inches='tight')
+	# plt.tight_layout()
+	plt.show()
+
+# anos = ["2014", "2015", "2016", "2017"]
+anos = ["2016", "2017"]
+
+myDfs = map(pegaDf, anos)
+
+agrupamentos = map(representacaoAssuntoProblema, myDfs)
+# agrupamentos = [(agrupamentos[0], agrupamentos[1]), (agrupamentos[1], agrupamentos[2]), (agrupamentos[2], agrupamentos[3])]
+
+agrupamentos = [(agrupamentos[0], agrupamentos[1])]
+
+map(cascata, agrupamentos)
