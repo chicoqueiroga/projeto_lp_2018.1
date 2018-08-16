@@ -57,6 +57,7 @@ def representacaoAssuntoProblema(df):
 
 	agrupamento.plot.barh(stacked=True, legend=True)
 
+	ax = plt.gca()
 	myCursor = Cursor(ax, useblit=True, linewidth=2)
 
 	plt.savefig(ano + '/representacaoAssuntoProblema.png', bbox_inches='tight')
