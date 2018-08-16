@@ -3,21 +3,9 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Cursor
-
-def pegaDf(ano):
-	trimestres = np.arange(1,5)
-	caminhos = map(lambda trimestre: "../../../Data/Atendimentos Fornecedor/"+ano+"/Trimestre "+str(trimestre)+".csv", trimestres)
-	myDfsTrimestre = map(lambda caminho: pd.read_csv(caminho, delimiter=';', na_filter=False, error_bad_lines=False), caminhos)
-
-	myDf =  pd.concat(myDfsTrimestre)
-	myDf = myDf[
-    (myDf.CodigoCNAEPrincipal != 'NULL') &\
-	(myDf.DescricaoTipoAtendimento.isin(['Abertura Direta de Reclamação', 'Reclamação de Ofício']))]
-
-	myDf['GrupoProblema'] = myDf['GrupoProblema'].apply(lambda x : x.replace('Problemas', 'P.') if 'Problemas' in x else (x.replace(' de Produto ou Serviço', '') if 'Serviço' in x else x))
-
-	return myDf
-
+import sys
+sys.path.insert(0, '../utils/')
+from utils import pegaDfProcon
 
 def analiseDePareto(coluna, ano, df):
 	dfAnalisado = pd.Series.to_frame(df[coluna].value_counts())
@@ -43,7 +31,6 @@ def analiseDePareto(coluna, ano, df):
 
 
 def representacaoAssuntoProblema(df):
-
 	ano = str(df['AnoAtendimento'].values[0])
 	
 	principaisProdutosServicos = analiseDePareto('GrupoAssunto', ano, df)
@@ -68,15 +55,12 @@ def representacaoAssuntoProblema(df):
 	agrupamento.sort_values('totalOcorrencias', inplace=True)
 	agrupamento.drop(columns = ['totalOcorrencias'], inplace=True)
 
-	# agrupamento.plot.barh(stacked=True)
+	agrupamento.plot.barh(stacked=True, legend=True)
 
-	# ax = plt.gca()
-	# # ax.xaxis.grid(color='gray', linestyle='dashed', linewidth=2)
-	
-	# myCursor = Cursor(ax, useblit=True, linewidth=2)
+	myCursor = Cursor(ax, useblit=True, linewidth=2)
 
-	# plt.savefig(ano + '/representacaoAssuntoProblema.png', bbox_inches='tight')
-	# plt.show()
+	plt.savefig(ano + '/representacaoAssuntoProblema.png', bbox_inches='tight')
+	plt.show()
 
 	return agrupamento
 
@@ -101,7 +85,6 @@ def cascata(antesDepois):
 	antesDepois['Outros'] = variacaoOutros
 	antesDepois = pd.concat([pd.Series(totalAntes, index=['totalAntes']), antesDepois])
 
-	# antesDepois.columns = ['variacoes']
 	print(type(antesDepois))
 	print(antesDepois)
 
@@ -122,17 +105,14 @@ def cascata(antesDepois):
 	ax.set_ylim(30000, 40000)
 
 	plt.savefig('cascata2016-2017.png', bbox_inches='tight')
-	# plt.tight_layout()
+	plt.tight_layout()
 	plt.show()
 
-# anos = ["2014", "2015", "2016", "2017"]
-anos = ["2016", "2017"]
+anos = ["2014", "2015", "2016", "2017"]
 
-myDfs = map(pegaDf, anos)
+myDfs = map(pegaDfProcon, anos)
 
 agrupamentos = map(representacaoAssuntoProblema, myDfs)
-# agrupamentos = [(agrupamentos[0], agrupamentos[1]), (agrupamentos[1], agrupamentos[2]), (agrupamentos[2], agrupamentos[3])]
-
-agrupamentos = [(agrupamentos[0], agrupamentos[1])]
+agrupamentos = [(agrupamentos[0], agrupamentos[1]), (agrupamentos[1], agrupamentos[2]), (agrupamentos[2], agrupamentos[3])]
 
 map(cascata, agrupamentos)
